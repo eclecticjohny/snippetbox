@@ -21,8 +21,8 @@ import (
 type application struct {
 	errorLog       *log.Logger
 	infoLog        *log.Logger
-	snippets       *models.SnippetModel
-	users          *models.UserModel
+	snippets       models.SnippetModelInterface
+	users          models.UserModelInterface
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
@@ -30,7 +30,8 @@ type application struct {
 
 func main() {
 	addr := flag.String("addr", ":4000", "HTTP network address")
-	dsn := flag.String("dsn", "web:pass@tcp(localhost:3306)/snippetbox?parseTime=true", "MySQL data source name")
+	dsn := flag.String("dsn", "web:pass@/snippetbox?parseTime=true", "MySQL data source name")
+
 	flag.Parse()
 
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
@@ -40,6 +41,7 @@ func main() {
 	if err != nil {
 		errorLog.Fatal(err)
 	}
+	defer db.Close()
 
 	templateCache, err := newTemplateCache()
 	if err != nil {
@@ -51,6 +53,7 @@ func main() {
 	sessionManager := scs.New()
 	sessionManager.Store = mysqlstore.New(db)
 	sessionManager.Lifetime = 12 * time.Hour
+
 	sessionManager.Cookie.Secure = true
 
 	app := &application{
@@ -77,8 +80,6 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	defer db.Close()
-
 	infoLog.Printf("Starting server on %s", *addr)
 	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	errorLog.Fatal(err)
@@ -89,10 +90,8 @@ func openDB(dsn string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
-
 	return db, nil
 }
